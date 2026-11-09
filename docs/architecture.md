@@ -48,3 +48,17 @@ This first kernel does not yet enforce a universal execution gate across shells,
 - End-to-end CI and release pipeline.
 
 These are tracked as implementation gaps, not presumed capabilities.
+
+
+## Isolated integration contracts (initial implementation)
+
+The replacement branch now contains additive adapter boundaries:
+
+- `bridge.py`: exact-byte write verification and structural request validation. It does not grant permission or implement the complete original Link Bridge transport.
+- `federation.py`: resource-owner-scoped delegation checks, explicit identity-verification input, and immutable revocation snapshots. It is a policy primitive, not a production federation/identity provider.
+- `receipts.py`: Ed25519 HumanReceipt verification against externally provisioned public keys. It never creates receipts or trust roots. The optional `cryptography` dependency must be installed and key provisioning, rotation, revocation, and end-to-end tests remain outstanding.
+- `scanner.py`: scanner finding and repair proposal contracts. Kronos agents are not yet connected; classification and repair remain separate.
+- `workflow.py`: stage adapter and stage-local repair-routing contracts. Vibe Coder, Vibe Developer, and Hybrid executors are not yet connected.
+- `tests/test_integrations.py`: focused tests have been added but have NOT been executed in this environment.
+
+These are additive files on `cpg-001-combined`; no supporting repository was changed. No CI workflow was enabled. No runtime-wide execution gate, production federation, full original quality gate, or replacement qualification is claimed.
