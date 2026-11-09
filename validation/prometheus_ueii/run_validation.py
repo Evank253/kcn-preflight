@@ -1,8 +1,7 @@
-"""Run the Prometheus suite, then submit its source to the CPG-001 assurance pipeline.
+"""Run English-only Prometheus tests and CPG-001 with all twelve evaluators registered.
 
-The CPG kernel intentionally has no production evaluators configured here.
-A NOT_MEASURED checkpoint is therefore expected and must not be represented as
-qualification. Unit-test success and CPG qualification are reported separately.
+Missing evidence remains NOT_MEASURED. It is not converted to PASS, and it is
+not itself a test-runner error. CPG qualification remains separate from tests.
 """
 from __future__ import annotations
 
@@ -31,6 +30,7 @@ def main() -> int:
 
     sys.path.insert(0, str(ROOT))
     from kcn_preflight.constitution import ConstitutionalPreflight
+    from kcn_preflight.evidence_evaluators import build_production_evaluators, evaluator_registry_report
     from kcn_preflight.ledger import EvidenceLedger
     from kcn_preflight.models import Stage
     from kcn_preflight.pipeline import CPG001Pipeline
@@ -49,8 +49,10 @@ def main() -> int:
     }
     ledger.append(test_evidence)
 
+    evaluators = build_production_evaluators()
+    registry_report = evaluator_registry_report(evaluators)
     pipeline = CPG001Pipeline(
-        preflight=ConstitutionalPreflight(),
+        preflight=ConstitutionalPreflight(evaluators=evaluators),
         ledger=ledger,
         enable_kronos=True,
     )
@@ -78,13 +80,35 @@ def main() -> int:
             "provenance_brackets": len(pipeline_result.provenance_brackets),
             "ledger_entries": len(ledger.entries),
             "ledger_integrity": "PASS" if ledger.verify() else "FAIL",
-            "qualification": "NOT_MEASURED",
-            "reason": "No production evaluators are registered for the twelve constitutional requirements.",
+            "evaluator_registry": registry_report,
+            "registered_evaluators": len(evaluators),
+            "requirements_with_evidence": sum(
+                1 for checkpoint in pipeline_result.checkpoints
+                for result in checkpoint.results if result.disposition.value == "PASS"
+            ),
+            "qualification": (
+                "NOT_MEASURED" if any(
+                    checkpoint.disposition.value == "NOT_MEASURED"
+                    for checkpoint in pipeline_result.checkpoints
+                ) else (
+                    "FAIL" if any(checkpoint.disposition.value == "FAIL"
+                                  for checkpoint in pipeline_result.checkpoints)
+                    else "PASS_PENDING_HUMAN_REVIEW"
+                )
+            ),
+            "reason": "All twelve evaluator adapters are registered. Missing trusted, artifact-bound evidence remains NOT_MEASURED; no PASS is inferred.",
         },
         "interpretation": "Unit-test results do not qualify the tool or establish production readiness.",
     }
     print(json.dumps(report, indent=2, ensure_ascii=False))
-    return test_run.returncode
+    hard_failure = (
+        test_run.returncode != 0
+        or not ledger.verify()
+        or not registry_report["registry_complete"]
+        or any(item.disposition.value == "FAIL"
+               for checkpoint in pipeline_result.checkpoints for item in checkpoint.results)
+    )
+    return 1 if hard_failure else 0
 
 
 if __name__ == "__main__":
