@@ -1,11 +1,11 @@
-"""Registered, fail-closed evidence evaluators for the twelve CPG-001 requirements.
+"""Registered, fail-closed Ed25519 evidence evaluators for all CPG-001 requirements.
 
-These adapters validate evidence-envelope shape, artifact/stage/policy binding,
-and trusted-verifier identity. They do not manufacture evidence or infer PASS.
-A deployment must provision a reviewed evidence bundle and trusted verifier IDs.
+No evaluator invents evidence. PASS requires an artifact/stage/policy-bound
+attestation signed by a verifier whose public key is provisioned out of band.
 """
 from __future__ import annotations
 
+import base64
 import json
 import os
 from pathlib import Path
@@ -17,8 +17,8 @@ from .models import Disposition, REQUIREMENTS, RequirementResult, Stage
 EvidenceEvaluator = Callable[[Stage, str], RequirementResult]
 
 
-def _load_bundle() -> dict:
-    path = os.environ.get("CPG_EVIDENCE_BUNDLE")
+def _load_json_env(name: str) -> dict:
+    path = os.environ.get(name)
     if not path:
         return {}
     try:
@@ -30,36 +30,57 @@ def _load_bundle() -> dict:
 
 def _make_evaluator(requirement: str) -> EvidenceEvaluator:
     def evaluate(stage: Stage, artifact_digest: str) -> RequirementResult:
-        bundle = _load_bundle()
+        bundle = _load_json_env("CPG_EVIDENCE_BUNDLE")
         if bundle.get("__invalid__"):
             return RequirementResult(requirement, Disposition.FAIL,
                                      "Evidence bundle is unreadable or malformed.")
         record = bundle.get("requirements", {}).get(requirement)
         if not isinstance(record, dict):
             return RequirementResult(requirement, Disposition.NOT_MEASURED,
-                                     "No requirement-specific evidence record was supplied.")
-        required = ("artifact_digest", "stage", "policy_version", "verifier_id",
-                    "verification_method", "disposition", "evidence_refs")
+                                     "No requirement-specific evidence attestation was supplied.")
+        required = ("artifact_digest", "stage", "policy_version", "verifier_key_id",
+                    "verification_method", "disposition", "evidence_refs", "signature")
         if any(key not in record for key in required):
             return RequirementResult(requirement, Disposition.NOT_MEASURED,
-                                     "Evidence record is incomplete.")
-        if (record["artifact_digest"] != artifact_digest
-                or record["stage"] != stage.value
-                or record["policy_version"] != POLICY_VERSION):
-            return RequirementResult(requirement, Disposition.FAIL,
-                                     "Evidence is not bound to this artifact, stage, and policy.")
+                                     "Evidence attestation is incomplete.")
         refs = record["evidence_refs"]
         if not isinstance(refs, list) or not refs or not all(isinstance(x, str) and x for x in refs):
             return RequirementResult(requirement, Disposition.NOT_MEASURED,
                                      "Evidence references are absent or malformed.")
-        trusted = {x.strip() for x in os.environ.get("CPG_TRUSTED_VERIFIERS", "").split(",") if x.strip()}
-        if record["verifier_id"] not in trusted:
-            return RequirementResult(requirement, Disposition.NOT_MEASURED,
-                                     "Evidence verifier is not in the externally configured trust set.",
+        if (record["artifact_digest"] != artifact_digest
+                or record["stage"] != stage.value
+                or record["policy_version"] != POLICY_VERSION):
+            return RequirementResult(requirement, Disposition.FAIL,
+                                     "Evidence is not bound to this artifact, stage, and policy.",
                                      tuple(refs))
         if not isinstance(record["verification_method"], str) or not record["verification_method"].strip():
             return RequirementResult(requirement, Disposition.NOT_MEASURED,
                                      "Independent verification method is not specified.", tuple(refs))
+        keys = _load_json_env("CPG_TRUSTED_VERIFIER_KEYS")
+        if keys.get("__invalid__"):
+            return RequirementResult(requirement, Disposition.FAIL,
+                                     "Trusted verifier key store is unreadable or malformed.", tuple(refs))
+        key_text = keys.get(record["verifier_key_id"])
+        if not isinstance(key_text, str):
+            return RequirementResult(requirement, Disposition.NOT_MEASURED,
+                                     "Verifier public key is not provisioned out of band.", tuple(refs))
+        signed_body = {key: value for key, value in record.items() if key != "signature"}
+        canonical = json.dumps(signed_body, sort_keys=True, separators=(",", ":"),
+                               ensure_ascii=False).encode("utf-8")
+        try:
+            from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+            public_key = Ed25519PublicKey.from_public_bytes(bytes.fromhex(key_text))
+            signature = base64.b64decode(record["signature"], validate=True)
+            public_key.verify(signature, canonical)
+        except ImportError:
+            return RequirementResult(requirement, Disposition.NOT_MEASURED,
+                                     "Ed25519 verification dependency is unavailable.", tuple(refs))
+        except (ValueError, TypeError):
+            return RequirementResult(requirement, Disposition.FAIL,
+                                     "Evidence signature or public-key encoding is invalid.", tuple(refs))
+        except Exception:
+            return RequirementResult(requirement, Disposition.FAIL,
+                                     "Evidence signature verification failed.", tuple(refs))
         if record["disposition"] == "FAIL":
             return RequirementResult(requirement, Disposition.FAIL,
                                      "Trusted verifier reported a requirement failure.", tuple(refs))
@@ -67,13 +88,13 @@ def _make_evaluator(requirement: str) -> EvidenceEvaluator:
             return RequirementResult(requirement, Disposition.NOT_MEASURED,
                                      "Trusted verifier did not provide a PASS disposition.", tuple(refs))
         return RequirementResult(requirement, Disposition.PASS,
-                                 "Requirement evidence is bound and attributed to a configured trusted verifier.",
+                                 "Artifact-bound evidence attestation verified with a provisioned Ed25519 key.",
                                  tuple(refs))
     return evaluate
 
 
 def build_production_evaluators() -> dict[str, EvidenceEvaluator]:
-    """Return one explicit evidence adapter for every canonical requirement."""
+    """Return one cryptographic evidence-verification adapter per canonical requirement."""
     return {requirement: _make_evaluator(requirement) for requirement in REQUIREMENTS}
 
 
