@@ -82,3 +82,17 @@ The following actual source capabilities have now been copied into the isolated 
 - Runtime-wide execution enforcement and trusted bootstrap.
 - HumanReceipt trust-root provisioning, key lifecycle, and full cryptographic verification tests.
 - Full end-to-end suite execution. Test files have been added, but no test command has been run; status remains NOT_MEASURED.
+
+
+## Kronos seven-role analysis integration (expanded)
+
+The isolated branch now vendors these additional original Kronos source files:
+- `backend/agents/fix_agent.py` → `kcn_preflight/vendor/kronos_fix_agent.py`
+- `backend/agents/swarm/agent_pool.py` → `kcn_preflight/vendor/kronos_agent_pool.py` (its import is redirected only to the vendored fix helper)
+- `backend/agents/swarm/executor.py` → `kcn_preflight/vendor/kronos_executor.py`
+
+`kronos_adapter.py` now connects the original SwarmScanner plus all six specialist agent roles (LINT, FORMAT, TEST, SECURITY, TYPE_CHECK, COMPLEXITY), i.e. seven analysis roles when counting the scanner. It runs the scanner's built-in checks on an isolated temporary artifact, dispatches all six specialist agents, and returns findings plus proposed changes/diffs. It does NOT invoke the original TaskManager's `finalize(write_files=True)`; no proposal is written back to the submitted artifact. This is an integrated scan-and-proposal path, not authorization to repair or release.
+
+The original Kronos TaskManager is intentionally not imported because its default scan invokes external tools/pytest and its finalize method can write files. We have preserved the source capabilities but kept Preflight's execution boundary fail-closed.
+
+Focused tests were added for all six agent results and non-mutation. They have NOT been run. The adapter remains NOT_MEASURED until tests execute in an isolated runtime.
