@@ -4,14 +4,6 @@ from kcn_preflight.pipeline import CPG001Pipeline
 
 
 def test_pipeline_records_kronos_analysis_for_each_independent_stage():
-    def evaluator(stage, digest):
-        return RequirementResult(
-            requirement=current_requirement[0],
-            disposition=Disposition.PASS,
-            detail="test evaluator",
-            evidence_refs=(digest,),
-        )
-
     # Bind each evaluator to its own requirement identity.
     evaluators = {}
     for requirement in REQUIREMENTS:
