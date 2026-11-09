@@ -99,3 +99,22 @@ Focused tests were added for all six agent results and non-mutation. They have N
 
 
 The Kronos analysis path is now invoked from `CPG001Pipeline.evaluate()` for each supplied stage artifact, before that stage's independent constitutional checkpoint. Each report is appended to the evidence ledger and returned in `PipelineResult.swarm_reports`. Scanner exceptions are recorded as `NOT_MEASURED`; they are never recorded as a clean scan. Kronos analysis remains proposal-only and does not write artifact changes. This does not make the constitutional 12-requirement checkpoint PASS; each requirement still needs its own verified evaluator evidence.
+
+
+## Investigation, provenance, and checkpoint snapshot protocol
+
+The pipeline now treats scanners and specialist agents as investigation instruments. Their job is to inspect, produce findings/proposals, and return evidence; they do not independently approve or write repairs.
+
+For every stage, the pipeline records:
+1. A pre-investigation artifact snapshot (SHA-256, size, phase, timestamp).
+2. Each tool execution summary (tool name, input digest, output digest, execution disposition, detail).
+3. A before-checkpoint artifact snapshot.
+4. The independent CPG-001 checkpoint result, including all 12 requirement dispositions and evidence references.
+5. An after-checkpoint artifact snapshot.
+6. A provenance bracket binding the before/after snapshots, checkpoint record, and tool records, including whether the artifact digest remained unchanged.
+
+These events are appended to the existing SHA-256 hash-chained EvidenceLedger. The tool execution status is recorded as `EXECUTED`, not `PASS`; tool execution success must never be confused with a clean scan or constitutional qualification. Scanner failure is `NOT_MEASURED`. Findings and proposed repairs remain separate from approval.
+
+The snapshots currently record cryptographic digest and size, not a retained copy of artifact bytes. This proves which bytes were observed if the source artifact is independently retained; it does not by itself provide artifact archival or non-repudiation. The ledger is hash-chained integrity evidence, not a digital signature. HumanReceipt remains the separate external human authorization mechanism.
+
+Focused provenance and pipeline tests have been added but remain NOT_MEASURED until executed in an isolated runtime.
