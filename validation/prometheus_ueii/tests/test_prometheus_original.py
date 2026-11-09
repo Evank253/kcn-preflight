@@ -23,6 +23,34 @@ class InterfaceTests(unittest.TestCase):
         self.assertEqual(result["content"]["execution_authorized"], False)
         self.assertTrue(result["content"]["constraints"])
 
+    def test_all_constraint_classes_and_multiword_phrases(self):
+        cases = [
+            ("The service must validate records", "MUST"),
+            ("The service shall validate records", "MUST"),
+            ("The service is required to validate records", "MUST"),
+            ("The service need to validate records", "MUST"),
+            ("We should validate records", "SHOULD"),
+            ("Prefer deterministic validation", "SHOULD"),
+            ("Ideally, validate every record", "SHOULD"),
+            ("Run without modifying source", "PROHIBITION"),
+            ("Do not modify source", "PROHIBITION"),
+            ("Don't modify source", "PROHIBITION"),
+            ("Never modify source", "PROHIBITION"),
+            ("Must not modify source", "PROHIBITION"),
+            ("Preserve the original source", "PRESERVATION"),
+            ("Retain the original source", "PRESERVATION"),
+            ("Keep the original source", "PRESERVATION"),
+            ("Keep unchanged the original source", "PRESERVATION"),
+        ]
+        for text, expected_type in cases:
+            with self.subTest(text=text):
+                ir = interpret(text, language="en")
+                self.assertIn(expected_type, [item["type"] for item in ir["constraints"]])
+
+    def test_constraint_patterns_do_not_match_substrings(self):
+        ir = interpret("The build mustache component is present", language="en")
+        self.assertFalse(ir["constraints"])
+
     def test_unknown_adapter_fails_closed(self):
         result = translate("Do something new", target="quantum_compiler")
         self.assertEqual(result["status"], "NOT_MEASURED")
