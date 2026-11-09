@@ -85,7 +85,7 @@ class CPG001Pipeline:
                     tool_record = record_tool_execution(
                         self.ledger, stage=stage.value, tool="KRONOS_SEVEN_ROLE_ANALYSIS",
                         input_digest=before.artifact_digest, output=report_record,
-                        disposition="PASS", detail="Analysis completed; proposals only; no artifact writes.",
+                        disposition="EXECUTED", detail="Tool completed; findings are recorded separately; proposals only; no artifact writes.",
                     )
                     tool_records.append(tool_record)
                 except Exception as exc:
