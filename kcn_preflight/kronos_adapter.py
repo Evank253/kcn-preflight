@@ -68,13 +68,12 @@ def run_kronos_agent_analysis(
 
         pool = build_agent_pool()
         jobs = []
-        for category, category_issues in grouped.items():
-            agent = pool.get(category)
-            if agent is not None:
-                jobs.append((
-                    agent.name,
-                    lambda a=agent, rows=category_issues: a.run(root, rows).to_dict(),
-                ))
+        for category, agent in pool.items():
+            category_issues = grouped.get(category, [])
+            jobs.append((
+                agent.name,
+                lambda a=agent, rows=category_issues: a.run(root, rows).to_dict(),
+            ))
         results = SwarmExecutor(max_workers=max_workers).run(jobs)
         # Copy data out of temp scope. Proposed updated text is retained as preview only.
         safe_results = {}
