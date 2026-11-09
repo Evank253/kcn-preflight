@@ -13,8 +13,8 @@ class InterfaceTests(unittest.TestCase):
         self.assertTrue(ir["constraints"])
         self.assertEqual(ir["evidence"]["human_intent_verified"], False)
 
-    def test_spanish_request_is_recognized(self):
-        ir = interpret("Construir un sistema que debe conservar los archivos originales sin cambios", language="es")
+    def test_english_request_is_recognized(self):
+        ir = interpret("Build a system that must preserve the original source files", language="en")
         self.assertIn("BUILD", ir["request"]["intent_candidates"])
         self.assertTrue(ir["constraints"])
 
@@ -43,9 +43,9 @@ class InterfaceTests(unittest.TestCase):
         self.assertEqual(ir["source"]["text"], text)
         self.assertEqual(len(ir["source"]["sha256"]), 64)
 
-    def test_spanish_summary_is_available(self):
-        ir = interpret("Analizar el sistema y verificar la arquitectura", language="es")
-        self.assertIn("Solicitud interpretada", render_natural_language(ir, language="es"))
+    def test_english_summary_is_available(self):
+        ir = interpret("Analyze the system and verify the architecture", language="en")
+        self.assertIn("Interpreted request", render_natural_language(ir, language="en"))
 
 
 if __name__ == "__main__":
