@@ -62,3 +62,23 @@ The replacement branch now contains additive adapter boundaries:
 - `tests/test_integrations.py`: focused tests have been added but have NOT been executed in this environment.
 
 These are additive files on `cpg-001-combined`; no supporting repository was changed. No CI workflow was enabled. No runtime-wide execution gate, production federation, full original quality gate, or replacement qualification is claimed.
+
+
+## Source-capability integrations added after initial adapter scaffolding
+
+The following actual source capabilities have now been copied into the isolated replacement branch, with source repositories unchanged:
+
+1. **Kronos SwarmScanner built-in scan** — source copied from `Evank253/Kronos-Vibe-Coder/backend/agents/swarm/scanner.py` at observed revision `d08944d6bbaeb1868073c30e6ab02a925ba8f7a5`. `kronos_adapter.py` executes only the scanner's built-in static scan against a temporary copy of submitted bytes. It deliberately does not call the source scanner's full `scan()` because that method runs pytest and optional external tools. Kronos' original agent pool/task manager and all seven-agent orchestration are NOT yet integrated. This is a real scanner capability integration, not the complete Kronos system.
+2. **Governance Substrate NormalizationGate** — source copied from `FINAL-VERSION-MMD_002/kcn-governance-substrate/bridge.py`; `substrate_adapter.py` exposes canonicalization, identifier checks, and exact-write validation. This is not the complete cross-system Link Bridge.
+3. **Governance Substrate EvidenceTrace** — source copied from `FINAL-VERSION-MMD_002/kcn-governance-substrate/evidence_trace.py`; adapter preserves per-gate stamps and divergence events.
+4. **Vibe Developer ↔ Vibe Coder contract** — `vibe_contract.py` implements the original published-pins-before-coder, coder acknowledgement, and smoke-result flow from `vibe-developer/server/services/vibeContract.js` and `vibeBridge.js`. The integration is a Python adapter with isolated in-memory state, not a live connection to the original Node service. It deliberately tightens deployment readiness: smoke PASS cannot clear unresolved coder blockers.
+
+### Still not integrated / not validated
+
+- Kronos' full agent pool, task manager, seven-agent orchestration, and separately approved repair execution.
+- Live Vibe Developer / Vibe Coder service connection, hybrid executor, and persistent contract transport.
+- Original Governance Substrate deploy simulator and full Preflight source-checker behavior.
+- Production federation, identity provider integration, KCN Link Bridge transport, revocation propagation.
+- Runtime-wide execution enforcement and trusted bootstrap.
+- HumanReceipt trust-root provisioning, key lifecycle, and full cryptographic verification tests.
+- Full end-to-end suite execution. Test files have been added, but no test command has been run; status remains NOT_MEASURED.
