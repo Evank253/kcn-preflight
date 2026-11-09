@@ -96,3 +96,6 @@ The isolated branch now vendors these additional original Kronos source files:
 The original Kronos TaskManager is intentionally not imported because its default scan invokes external tools/pytest and its finalize method can write files. We have preserved the source capabilities but kept Preflight's execution boundary fail-closed.
 
 Focused tests were added for all six agent results and non-mutation. They have NOT been run. The adapter remains NOT_MEASURED until tests execute in an isolated runtime.
+
+
+The Kronos analysis path is now invoked from `CPG001Pipeline.evaluate()` for each supplied stage artifact, before that stage's independent constitutional checkpoint. Each report is appended to the evidence ledger and returned in `PipelineResult.swarm_reports`. Scanner exceptions are recorded as `NOT_MEASURED`; they are never recorded as a clean scan. Kronos analysis remains proposal-only and does not write artifact changes. This does not make the constitutional 12-requirement checkpoint PASS; each requirement still needs its own verified evaluator evidence.
