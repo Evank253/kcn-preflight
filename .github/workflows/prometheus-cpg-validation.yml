@@ -1,0 +1,37 @@
+name: Prometheus UEII — CPG-001 Validation
+
+on:
+  push:
+    branches:
+      - "validation/**"
+    paths:
+      - "validation/prometheus_ueii/**"
+      - "kcn_preflight/**"
+      - ".github/workflows/prometheus-cpg-validation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out isolated validation branch
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Run bilingual tests and CPG-001 Preflight
+        run: |
+          set -o pipefail
+          python validation/prometheus_ueii/run_validation.py 2>&1 | tee prometheus-cpg001-validation.json
+      - name: Preserve validation report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: prometheus-cpg001-validation
+          path: prometheus-cpg001-validation.json
+          if-no-files-found: warn
