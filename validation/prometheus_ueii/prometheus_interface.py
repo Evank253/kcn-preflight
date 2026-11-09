@@ -10,12 +10,14 @@ import ast
 import hashlib
 import json
 import re
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Callable
 
 SCHEMA = "PROMETHEUS-UIR-1"
 VERSION = "0.1.0"
 
+# Explicit starter lexicon. This is not claimed to be a general-purpose translator.
 LEXICON = {
     "en": {
         "build": ("build", "create", "implement", "develop", "construct", "design"),
@@ -41,7 +43,7 @@ LEXICON = {
     },
 }
 DOMAIN_TERMS = {
-    "mathematics": ("equation", "theorem", "matrix", "function", "ecuación", "teorema", "matriz", "función"),
+    "mathematics": ("equation", "theorem", "matrix", "function", "equation", "ecuación", "teorema", "matriz", "función"),
     "software": ("software", "code", "program", "api", "database", "schema", "código", "programa", "base de datos"),
     "science": ("experiment", "hypothesis", "simulation", "model", "experimento", "hipótesis", "simulación", "modelo"),
     "cybersecurity": ("security", "vulnerability", "malware", "threat", "seguridad", "vulnerabilidad", "amenaza"),
@@ -115,6 +117,7 @@ def _operations(text: str, lang: str) -> list[dict[str, str]]:
 
 
 def interpret(text: str, *, language: str = "auto", context: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Convert a human request into a typed, source-linked intermediate representation."""
     if not isinstance(text, str) or not text.strip():
         raise ValueError("Input text must be a non-empty string")
     lang, lang_basis = _language(text, language)
@@ -128,11 +131,17 @@ def interpret(text: str, *, language: str = "auto", context: dict[str, Any] | No
             unresolved.append({"source_line": i, "text": line, "status": "UNRESOLVED",
                                "reason": "NO_SUPPORTED_OPERATION_OR_CONSTRAINT_PATTERN"})
     payload = {
-        "schema": SCHEMA, "version": VERSION,
+        "schema": SCHEMA,
+        "version": VERSION,
         "source": {"text": text, "sha256": _sha(text), "language": lang, "language_basis": lang_basis},
         "request": {"intent_candidates": intents, "goal_text": lines[0], "context": context or {}},
-        "domains": _domains(text), "operations": operations, "constraints": constraints,
-        "entities": [], "dependencies": [], "assumptions": [], "unresolved": unresolved,
+        "domains": _domains(text),
+        "operations": operations,
+        "constraints": constraints,
+        "entities": [],
+        "dependencies": [],
+        "assumptions": [],
+        "unresolved": unresolved,
         "evidence": {"interpretation_status": "CANDIDATE_REQUIRES_REVIEW",
                      "human_intent_verified": False, "authority": "NONE"},
     }
@@ -173,6 +182,7 @@ def _math(ir: dict[str, Any]) -> dict[str, Any]:
 
 
 def translate(text: str, *, target: str = "ir", language: str = "auto") -> dict[str, Any]:
+    """Translate input into one explicitly supported target representation."""
     ir = interpret(text, language=language)
     adapters: dict[str, Callable[[dict[str, Any]], dict[str, Any]]] = {
         "ir": lambda x: x, "architecture": _architecture,
@@ -188,6 +198,7 @@ def translate(text: str, *, target: str = "ir", language: str = "auto") -> dict[
 
 
 def inspect_artifact(content: str, *, artifact_type: str) -> dict[str, Any]:
+    """Reverse-inspect supported JSON, Python, math-text, or architecture-text artifacts."""
     digest = _sha(content)
     result: dict[str, Any] = {"schema": SCHEMA, "artifact_type": artifact_type,
                               "source_sha256": digest, "findings": [], "unresolved": [],
@@ -230,6 +241,7 @@ def inspect_artifact(content: str, *, artifact_type: str) -> dict[str, Any]:
 
 
 def render_natural_language(ir: dict[str, Any], *, language: str = "en") -> str:
+    """Produce a transparent summary; retain original source rather than claiming full translation."""
     if language not in ("en", "es"):
         raise ValueError("language must be 'en' or 'es'")
     intent = ", ".join(ir["request"]["intent_candidates"])
@@ -242,3 +254,33 @@ def render_natural_language(ir: dict[str, Any], *, language: str = "en") -> str:
             f"Detected domains: {', '.join(ir['domains']) or 'undetermined'}.\n"
             f"Candidate operations: {len(ir['operations'])}; candidate constraints: {len(ir['constraints'])}; "
             f"unresolved items: {len(ir['unresolved'])}.\nOriginal text preserved; human intent is not verified.")
+
+
+def main() -> None:
+    import argparse
+    parser = argparse.ArgumentParser(description="Prometheus Universal Engineering & Intelligence Interface")
+    parser.add_argument("--text", help="Natural-language request")
+    parser.add_argument("--file", help="UTF-8 source file")
+    parser.add_argument("--language", choices=("auto", "en", "es"), default="auto")
+    parser.add_argument("--target", choices=("ir", "json", "architecture", "pseudocode", "python_spec", "math"), default="ir")
+    parser.add_argument("--inspect", choices=("json", "python", "math", "architecture"))
+    parser.add_argument("--out", help="Optional JSON output path")
+    args = parser.parse_args()
+    if args.inspect:
+        if not args.file:
+            parser.error("--inspect requires --file")
+        result = inspect_artifact(Path(args.file).read_text(encoding="utf-8"), artifact_type=args.inspect)
+    else:
+        text = args.text if args.text is not None else Path(args.file).read_text(encoding="utf-8") if args.file else None
+        if text is None:
+            parser.error("provide --text or --file")
+        result = translate(text, target=args.target, language=args.language)
+    serialized = json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True)
+    if args.out:
+        Path(args.out).write_text(serialized + "\n", encoding="utf-8")
+    else:
+        print(serialized)
+
+
+if __name__ == "__main__":
+    main()
