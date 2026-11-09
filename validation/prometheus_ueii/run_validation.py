@@ -73,6 +73,7 @@ def main() -> int:
             "checkpoint_dispositions": [item.disposition.value for item in pipeline_result.checkpoints],
             "kronos_reports": len(pipeline_result.swarm_reports),
             "kronos_finding_counts": [item.get("finding_count") for item in pipeline_result.swarm_reports],
+            "kronos_findings": [[{"scanner": finding.get("scanner"), "severity": finding.get("severity"), "summary": finding.get("summary"), "evidence_refs": finding.get("evidence_refs", [])} for finding in item.get("findings", [])] for item in pipeline_result.swarm_reports],
             "kronos_roles": [item.get("agent_roles", []) for item in pipeline_result.swarm_reports],
             "provenance_brackets": len(pipeline_result.provenance_brackets),
             "ledger_entries": len(ledger.entries),
