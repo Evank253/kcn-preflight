@@ -103,18 +103,29 @@ class CPG001Pipeline:
                     )
                     tool_records.append(tool_record)
 
-            after = capture_snapshot(
-                stage.value, "AFTER_INVESTIGATION_BEFORE_CHECKPOINT", artifact,
-                self.ledger, snapshot_id + ":after",
+            before_checkpoint = capture_snapshot(
+                stage.value, "BEFORE_CHECKPOINT", artifact,
+                self.ledger, snapshot_id + ":before-checkpoint",
             )
-            self.ledger.append({"event": "artifact_snapshot", "record": after.to_dict()})
+            self.ledger.append({
+                "event": "artifact_snapshot", "record": before_checkpoint.to_dict()
+            })
 
             checkpoint = self.preflight.run_checkpoint(stage, artifact)
             checkpoints.append(checkpoint)
             checkpoint_record = checkpoint.to_dict()
             self.ledger.append({"event": "checkpoint", "record": checkpoint_record})
+
+            after_checkpoint = capture_snapshot(
+                stage.value, "AFTER_CHECKPOINT", artifact,
+                self.ledger, snapshot_id + ":after-checkpoint",
+            )
+            self.ledger.append({
+                "event": "artifact_snapshot", "record": after_checkpoint.to_dict()
+            })
             bracket = record_checkpoint_bracket(
-                self.ledger, before, after, checkpoint_record, tuple(tool_records)
+                self.ledger, before_checkpoint, after_checkpoint,
+                checkpoint_record, tuple(tool_records)
             )
             brackets.append(bracket)
 
