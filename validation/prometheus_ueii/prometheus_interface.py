@@ -30,32 +30,25 @@ LEXICON = {
         "without": ("without", "do not", "don't", "never", "must not"),
         "preserve": ("preserve", "retain", "keep", "unchanged"),
     },
-    "es": {
-        "build": ("construir", "crear", "implementar", "desarrollar", "diseñar"),
-        "investigate": ("investigar", "analizar", "diagnosticar", "inspeccionar", "depurar"),
-        "translate": ("traducir", "convertir", "transformar", "mapear"),
-        "explain": ("explicar", "describir", "documentar", "reconstruir", "comprender"),
-        "verify": ("verificar", "validar", "probar", "comprobar"),
-        "must": ("debe", "deberá", "obligatorio", "tiene que"),
-        "should": ("debería", "preferiblemente"),
-        "without": ("sin", "no debe", "nunca"),
-        "preserve": ("preservar", "conservar", "mantener", "sin cambios"),
-    },
 }
 DOMAIN_TERMS = {
-    "mathematics": ("equation", "theorem", "matrix", "function", "equation", "ecuación", "teorema", "matriz", "función"),
-    "software": ("software", "code", "program", "api", "database", "schema", "código", "programa", "base de datos"),
-    "science": ("experiment", "hypothesis", "simulation", "model", "experimento", "hipótesis", "simulación", "modelo"),
-    "cybersecurity": ("security", "vulnerability", "malware", "threat", "seguridad", "vulnerabilidad", "amenaza"),
-    "engineering": ("system", "architecture", "interface", "dependency", "sistema", "arquitectura", "interfaz", "dependencia"),
+    "mathematics": ("equation", "theorem", "matrix", "function"),
+    "software": ("software", "code", "program", "api", "database", "schema"),
+    "science": ("experiment", "hypothesis", "simulation", "model"),
+    "cybersecurity": ("security", "vulnerability", "malware", "threat"),
+    "engineering": ("system", "architecture", "interface", "dependency"),
 }
 CONSTRAINT_PATTERNS = {
-    "MUST": r"\b(must|shall|required|debe|deberá|obligatorio|tiene que)\b",
-    "SHOULD": r"\b(should|prefer|ideally|debería|preferiblemente)\b",
-    "PROHIBITION": r"\b(without|do not|don't|never|must not|sin|no debe|nunca)\b",
-    "PRESERVATION": r"\b(preserve|retain|keep unchanged|preservar|conservar|mantener)\b",
+    "MUST": r"\\b(must|shall|required|need to)\\b",
+    "SHOULD": r"\\b(should|prefer|ideally)\\b",
+    "PROHIBITION": r"\\b(without|do not|don't|never|must not)\\b",
+    "PRESERVATION": r"\\b(preserve|retain|keep unchanged|keep)\\b",
 }
-ACTION_VERBS = sorted({w for lang in LEXICON.values() for group in lang.values() for w in group}, key=len, reverse=True)
+ACTION_VERBS = tuple(
+    verb
+    for intent in ("build", "investigate", "translate", "explain", "verify")
+    for verb in LEXICON["en"][intent]
+)
 
 
 def _sha(text: str) -> str:
@@ -63,22 +56,22 @@ def _sha(text: str) -> str:
 
 
 def _language(text: str, requested: str = "auto") -> tuple[str, str]:
-    if requested in ("en", "es"):
-        return requested, "USER_SELECTED"
+    if requested not in ("auto", "en"):
+        raise ValueError("This validation build supports English only; use language='en' or 'auto'.")
+    if requested == "en":
+        return "en", "USER_SELECTED"
     low = text.casefold()
-    en = sum(low.count(w) for w in (" the ", " and ", " without ", " build ", " must "))
-    es = sum(low.count(w) for w in (" el ", " la ", " y ", " sin ", " debe ", " construir "))
-    if en == es == 0:
-        return "und", "INSUFFICIENT_LANGUAGE_EVIDENCE"
-    return ("es", "LEXICAL_HEURISTIC") if es > en else ("en", "LEXICAL_HEURISTIC")
+    english_markers = (" the ", " and ", " without ", " build ", " must ", " a ", " to ")
+    if any(marker in f" {low} " for marker in english_markers):
+        return "en", "ENGLISH_HEURISTIC"
+    return "und", "INSUFFICIENT_ENGLISH_EVIDENCE"
 
 
 def _intent(text: str, lang: str) -> list[str]:
     low = text.casefold()
     scores = []
-    for intent, words in LEXICON.get(lang, {}).items():
-        if intent in ("must", "should", "without", "preserve"):
-            continue
+    for intent in ("build", "investigate", "translate", "explain", "verify"):
+        words = LEXICON["en"][intent]
         score = sum(1 for word in words if re.search(r"(?<!\w)" + re.escape(word) + r"(?!\w)", low))
         if score:
             scores.append((score, intent))
@@ -106,6 +99,8 @@ def _constraints(text: str) -> list[dict[str, str]]:
 
 
 def _operations(text: str, lang: str) -> list[dict[str, str]]:
+    if lang != "en":
+        return []
     result = []
     for line_no, line in enumerate(_lines(text), 1):
         low = line.casefold()
@@ -242,14 +237,9 @@ def inspect_artifact(content: str, *, artifact_type: str) -> dict[str, Any]:
 
 def render_natural_language(ir: dict[str, Any], *, language: str = "en") -> str:
     """Produce a transparent summary; retain original source rather than claiming full translation."""
-    if language not in ("en", "es"):
-        raise ValueError("language must be 'en' or 'es'")
+    if language != "en":
+        raise ValueError("This validation build renders English only; use language='en'.")
     intent = ", ".join(ir["request"]["intent_candidates"])
-    if language == "es":
-        return (f"Solicitud interpretada (candidata): {intent}. Objetivo: {ir['request']['goal_text']}\n"
-                f"Dominios detectados: {', '.join(ir['domains']) or 'no determinados'}.\n"
-                f"Operaciones candidatas: {len(ir['operations'])}; restricciones candidatas: {len(ir['constraints'])}; "
-                f"elementos sin resolver: {len(ir['unresolved'])}.\nTexto original conservado; la intención humana no está verificada.")
     return (f"Interpreted request (candidate): {intent}. Goal: {ir['request']['goal_text']}\n"
             f"Detected domains: {', '.join(ir['domains']) or 'undetermined'}.\n"
             f"Candidate operations: {len(ir['operations'])}; candidate constraints: {len(ir['constraints'])}; "
@@ -261,7 +251,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Prometheus Universal Engineering & Intelligence Interface")
     parser.add_argument("--text", help="Natural-language request")
     parser.add_argument("--file", help="UTF-8 source file")
-    parser.add_argument("--language", choices=("auto", "en", "es"), default="auto")
+    parser.add_argument("--language", choices=("auto", "en"), default="auto")
     parser.add_argument("--target", choices=("ir", "json", "architecture", "pseudocode", "python_spec", "math"), default="ir")
     parser.add_argument("--inspect", choices=("json", "python", "math", "architecture"))
     parser.add_argument("--out", help="Optional JSON output path")
