@@ -39,10 +39,10 @@ DOMAIN_TERMS = {
     "engineering": ("system", "architecture", "interface", "dependency"),
 }
 CONSTRAINT_PATTERNS = {
-    "MUST": r"\b(must|shall|required|need to)\\b",
-    "SHOULD": r"\b(should|prefer|ideally)\\b",
-    "PROHIBITION": r"\b(without|do not|don't|never|must not)\\b",
-    "PRESERVATION": r"\b(preserve|retain|keep unchanged|keep)\\b",
+    "MUST": r"\b(must|shall|required|need to)\b",
+    "SHOULD": r"\b(should|prefer|ideally)\b",
+    "PROHIBITION": r"\b(without|do not|don't|never|must not)\b",
+    "PRESERVATION": r"\b(keep unchanged|preserve|retain|keep)\b",
 }
 ACTION_VERBS = tuple(
     verb
