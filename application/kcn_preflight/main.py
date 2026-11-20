@@ -153,8 +153,12 @@ def validate_adapter_result(stage_key: str, result: AdapterResult, project: dict
             return False, "Human authorization is not explicitly APPROVED."
         if not result.human_receipt_id:
             return False, "HumanReceipt identifier is missing."
-        if result.artifact_digest != project["source_digest"]:
-            return False, "HumanReceipt digest does not match the pinned project digest."
+        qualified = next(
+            (run for run in reversed(get_runs(project["id"])) if run["stage_key"] == "ci_qualification" and run["status"] == "PASS"),
+            None,
+        )
+        if qualified is None or result.artifact_digest != qualified["artifact_digest"]:
+            return False, "HumanReceipt digest does not match the CI-qualified artifact digest."
         if result.scope != project["scope"] or result.policy_version != POLICY_VERSION:
             return False, "HumanReceipt scope or policy version does not match."
     if stage_key == "constitutional_integration":
