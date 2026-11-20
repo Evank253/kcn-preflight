@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>KCN Preflight</title>
+  <style>
+    :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; background:#0b1020; color:#e8edf7; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:radial-gradient(circle at 15% 0%,#1b2b49 0,transparent 38%),#0b1020; min-height:100vh; }
+    header { padding:26px max(22px,calc((100vw - 1120px)/2)); border-bottom:1px solid #27334c; display:flex; justify-content:space-between; align-items:center; gap:18px; }
+    .brand { font-weight:800; letter-spacing:.12em; font-size:14px; color:#a8c7ff; }
+    .tag { color:#a9b7cd; font-size:12px; border:1px solid #34435e; border-radius:99px; padding:7px 11px; }
+    main { max-width:1120px; margin:36px auto; padding:0 22px 60px; }
+    h1 { font-size:clamp(30px,5vw,48px); margin:0 0 10px; letter-spacing:-.04em; }
+    .sub { color:#aab7ca; max-width:720px; line-height:1.65; }
+    .notice { border:1px solid #705d32; background:#282315; color:#f2d99a; padding:13px 16px; border-radius:12px; margin:24px 0; line-height:1.5; font-size:13px; }
+    .grid { display:grid; grid-template-columns:1.1fr .9fr; gap:20px; margin-top:24px; }
+    .card { background:#111a2c; border:1px solid #293751; border-radius:16px; padding:22px; box-shadow:0 18px 45px #0003; }
+    h2 { font-size:17px; margin:0 0 18px; }
+    label { display:block; color:#aab7ca; font-size:12px; margin:13px 0 6px; }
+    input,textarea { width:100%; background:#0a1222; color:#eef3fb; border:1px solid #34435e; border-radius:9px; padding:11px 12px; font:inherit; font-size:13px; }
+    textarea { min-height:70px; resize:vertical; }
+    button { background:#7db0ff; color:#081326; border:0; border-radius:9px; padding:11px 15px; font-weight:750; cursor:pointer; margin-top:15px; }
+    button:disabled { opacity:.45; cursor:not-allowed; }
+    .stage { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 0; border-bottom:1px solid #26334a; }
+    .stage:last-child { border:0; }
+    .stage small { display:block; color:#8799b4; margin-top:4px; }
+    .pill { font-size:10px; border:1px solid #43516a; border-radius:30px; padding:5px 8px; color:#a9b7ca; white-space:nowrap; }
+    .pill.ready { color:#9ee6c2; border-color:#317a5b; }
+    .pill.blocked { color:#ffcf92; border-color:#8a6534; }
+    #message { color:#c2d1e6; font-size:13px; white-space:pre-wrap; margin-top:14px; line-height:1.5; }
+    .project { padding:12px 0; border-bottom:1px solid #26334a; cursor:pointer; }
+    .project strong { display:block; font-size:13px; }
+    .project small { color:#899bb5; }
+    .actions { display:flex; gap:10px; flex-wrap:wrap; }
+    .secondary { background:#263651; color:#dbe8fa; }
+    @media(max-width:760px){ .grid{grid-template-columns:1fr} header{align-items:flex-start;flex-direction:column} }
+  </style>
+</head>
+<body>
+<header><div class="brand">KCN / PREFLIGHT</div><div class="tag">EVIDENCE-GATED ENGINEERING CONTROL</div></header>
+<main>
+  <h1>Build with evidence.<br>Qualify before deployment.</h1>
+  <p class="sub">An independent workflow for engineering inspection, constitutional integration, final qualification, and external human authorization. Every missing control fails closed.</p>
+  <div class="notice"><strong>Development foundation:</strong> connectors are not assumed to exist. Configure the real Vibe Coder, Vibe Developer, hybrid, governance, CI, and Human Authority endpoints before running those stages. This application never deploys to production.</div>
+  <div class="grid">
+    <section class="card">
+      <h2>Register a project</h2>
+      <form id="project-form">
+        <label>Project name</label><input name="name" required minlength="2" placeholder="System to qualify">
+        <label>Repository URL</label><input name="repository_url" type="url" required placeholder="https://github.com/owner/repository">
+        <label>Immutable source ref (commit SHA)</label><input name="source_ref" required minlength="7" placeholder="Full commit SHA">
+        <label>Source artifact SHA-256</label><input name="source_digest" required pattern="sha256:[0-9a-f]{64}" placeholder="sha256:...">
+        <label>Qualification scope</label><textarea name="scope" required minlength="3" placeholder="Exact artifact, environment, and intended qualification scope"></textarea>
+        <button type="submit">Register project</button>
+      </form>
+      <div id="message" role="status"></div>
+    </section>
+    <section class="card">
+      <h2>Workflow connectors</h2>
+      <div id="stages"></div>
+      <p class="sub" style="font-size:12px;margin-top:14px">A green connector means only that an endpoint is configured, not that it has passed qualification.</p>
+    </section>
+  </div>
+  <section class="card" style="margin-top:20px">
+    <h2>Registered projects</h2>
+    <div id="projects">Loading…</div>
+    <div class="actions"><button id="run-next" disabled>Run next stage</button><button id="refresh" class="secondary">Refresh</button><button id="evidence" class="secondary" disabled>View evidence</button></div>
+    <div id="selected-message" role="status"></div>
+  </section>
+</main>
+<script>
+let selected = null;
+const el = (id) => document.getElementById(id);
+async function api(path, options={}) {
+  const response = await fetch(path, {headers:{'Content-Type':'application/json'}, ...options});
+  const data = await response.json().catch(()=>({detail:response.statusText}));
+  if (!response.ok) throw new Error(data.detail || 'Request failed');
+  return data;
+}
+async function loadConfig() {
+  const data = await api('/api/config');
+  el('stages').innerHTML = data.stages.map(s => '<div class="stage"><div>'+s.label+'<small>'+s.key+'</small></div><span class="pill '+(s.configured?'ready':'blocked')+'">'+(s.configured?'CONFIGURED':'NOT CONFIGURED')+'</span></div>').join('');
+}
+async function loadProjects() {
+  const items = await api('/api/projects');
+  el('projects').innerHTML = items.length ? items.map(p => '<div class="project" data-id="'+p.id+'"><strong>'+escapeHtml(p.name)+'</strong><small>'+p.status+' · '+p.source_ref.slice(0,12)+'…</small></div>').join('') : '<p class="sub">No projects registered yet.</p>';
+  document.querySelectorAll('.project').forEach(node => node.addEventListener('click', () => selectProject(node.dataset.id)));
+}
+function escapeHtml(value) { return String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+async function selectProject(id) {
+  selected = id; el('run-next').disabled = false; el('evidence').disabled = false;
+  const data = await api('/api/projects/'+id);
+  el('selected-message').textContent = data.project.name+' · '+data.runs.length+' of '+data.stages.length+' stages recorded. Current state: '+data.project.status;
+}
+el('project-form').addEventListener('submit', async event => {
+  event.preventDefault(); const values = Object.fromEntries(new FormData(event.target).entries());
+  try { const project = await api('/api/projects',{method:'POST',body:JSON.stringify(values)}); el('message').textContent='Registered '+project.name+'. No stage has been marked PASS.'; event.target.reset(); await loadProjects(); await selectProject(project.id); }
+  catch(error) { el('message').textContent=error.message; }
+});
+el('run-next').addEventListener('click', async () => {
+  if (!selected) return;
+  el('run-next').disabled=true;
+  try { const result=await api('/api/projects/'+selected+'/run-next',{method:'POST'}); el('selected-message').textContent=result.label+': '+result.status+' — '+result.result.summary; await loadProjects(); }
+  catch(error) { el('selected-message').textContent=error.message; }
+  finally { el('run-next').disabled=false; }
+});
+el('refresh').addEventListener('click', async()=>{await loadConfig();await loadProjects();});
+el('evidence').addEventListener('click', async()=>{
+  if(!selected)return;
+  try { const data=await api('/api/projects/'+selected+'/evidence'); el('selected-message').textContent=JSON.stringify(data,null,2); }
+  catch(error){el('selected-message').textContent=error.message;}
+});
+loadConfig().then(loadProjects).catch(error=>{el('message').textContent=error.message;});
+</script>
+</body>
+</html>
