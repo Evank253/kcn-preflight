@@ -1,0 +1,1 @@
+This placeholder documents that CI wiring is a follow-up integration task. The application source and tests are committed in this branch; no CI qualification is claimed until a workflow is configured and run.
