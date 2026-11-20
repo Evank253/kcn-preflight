@@ -1,0 +1,28 @@
+name: KCN Preflight Tests
+
+on:
+  push:
+    branches:
+      - Python-3
+      - feature/preflight-application-foundation-2026-11-19
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: application
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: application/pyproject.toml
+      - name: Install application and test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+      - name: Run application tests
+        run: pytest -q
